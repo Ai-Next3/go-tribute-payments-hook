@@ -128,7 +128,7 @@ type Donation struct {
 	Period            string  `json:"period,omitempty"`
 	Currency          string  `json:"currency,omitempty"`
 	Active            bool    `json:"active,omitempty"`
-	CreatedAt         int64   `json:"createdAt,omitempty"`
+	CreatedAt         string  `json:"createdAt,omitempty"`
 	Message           string  `json:"message,omitempty"`
 	Anonymously       *bool   `json:"anonymously,omitempty"`
 }
