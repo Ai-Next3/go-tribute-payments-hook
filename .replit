@@ -1,0 +1,8 @@
+modules = ["go-1.23"]
+run = "go run"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "go run"]

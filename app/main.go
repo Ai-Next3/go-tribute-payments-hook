@@ -201,6 +201,12 @@ func main() {
 	}
 	defer client.Stop()
 
+    // // <<< ДОБАВЛЯЕМ ЗАДЕРЖКУ ЗДЕСЬ >>>
+    // log.Println("Waiting a bit for synchronization...")
+    // time.Sleep(10 * time.Second) // Ждем, например, 10 секунд
+    // log.Println("Done waiting.")
+    // // <<< КОНЕЦ ЗАДЕРЖКИ >>>
+
 	botUser, err := client.ResolveUsername(settings.BotUsername)
 	if err != nil {
 		log.Fatalln(err)
