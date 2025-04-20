@@ -7,8 +7,8 @@ run = "go run app/main.go"
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "go run app/main.go"]
-build = ["sh", "-c", "mkdir -p app/session"]
+run = ["sh", "-c", "cd app && go run main.go"]
+build = ["sh", "-c", "mkdir -p app/session && cd app && go mod download"]
 deploymentTarget = "gce"
 ignorePorts = true
 
