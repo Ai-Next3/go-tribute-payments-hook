@@ -1,13 +1,26 @@
+
 modules = ["go-1.21"]
-run = "go run"
+run = "cd app && go run main.go"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "go run"]
+run = ["sh", "-c", "cd app && go run main.go"]
 
 [packager]
 packages = [
   "github.com/lib/pq"
 ]
+
+[workflows]
+runButton = "Run App"
+
+[[workflows.workflow]]
+name = "Run App"
+author = 41006223
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd app && go run main.go"
