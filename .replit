@@ -1,4 +1,3 @@
-
 modules = ["go-1.21"]
 run = "cd app && go run main.go"
 
