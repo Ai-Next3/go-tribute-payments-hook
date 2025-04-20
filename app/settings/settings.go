@@ -39,4 +39,10 @@ var (
 	WebhookSignatureKey    = getStr("webhook_signature_key", "")
 	WebhookSignatureHeader = getStr("webhook_signature_header", "X-Signature")
 	WebhookBatch           = getStr("webhook_batch", "0") == "1"
+
+	DBUser     = getStr("DB_USER", "")
+	DBPassword = getStr("DB_PASSWORD", "")
+	DBHost     = getStr("DB_HOST", "localhost")
+	DBPort     = getStr("DB_PORT", "5432")
+	DBName     = getStr("DB_NAME", "")
 )

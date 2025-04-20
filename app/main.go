@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/amarnathcjd/gogram/telegram"
-	"github.com/natefinch/atomic"
 	"go-tribute-api/settings"
 	"go-tribute-api/tg"
 	"go-tribute-api/tribute"
@@ -18,8 +17,13 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/amarnathcjd/gogram/telegram"
+	_ "github.com/lib/pq"
+	"github.com/natefinch/atomic"
 )
 
 var newTXLock = &sync.Mutex{}
@@ -66,6 +70,31 @@ func fetchNewTransactions(client *telegram.Client, retry bool) {
 	}
 }
 
+// Проверка, был ли donation уже обработан
+func isDonationProcessed(donationID int64) (bool, error) {
+	db, err := openDB()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	var exists bool
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM processed_donations WHERE donation_id = $1)", donationID).Scan(&exists)
+	return exists, err
+}
+
+// Отметить donation как обработанный
+func markDonationProcessed(donationID int64) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO processed_donations (donation_id) VALUES ($1) ON CONFLICT DO NOTHING", donationID)
+	return err
+}
+
 func sendTransactions(transactions []tribute.Transaction) error {
 	if len(transactions) == 0 || settings.WebhookURL == "" {
 		log.Println("No new transactions")
@@ -83,6 +112,40 @@ func sendTransactions(transactions []tribute.Transaction) error {
 			go func(tx tribute.Transaction) {
 				defer waiter.Done()
 				log.Println("Sending transaction", tx.ID)
+
+				// --- НАЧАЛО: Проверка и начисление баланса ---
+				desc := tx.DonationRequest.Description
+				donationID := tx.Donation.ID
+				if desc != "" &&
+					strings.Contains(desc, "Ваша благодарность вернется к вам в полном объеме в приложении chatGPT") &&
+					donationID != 0 {
+
+					processed, err := isDonationProcessed(donationID)
+					if err != nil {
+						log.Println("[WARN] Не удалось проверить donation_id:", donationID, err)
+						return
+					}
+					if processed {
+						log.Println("Донат уже обработан, пропускаем:", donationID)
+						return
+					}
+
+					tgID := tx.User.TelegramID
+					amount := tx.DonationRequest.Amount
+					if tgID != 0 && amount > 0 {
+						err := addBalanceByTgID(tgID, amount)
+						if err != nil {
+							log.Println("[WARN] Не удалось начислить баланс пользователю:", tgID, err)
+						} else {
+							log.Println("Баланс успешно начислен пользователю:", tgID, "на сумму:", amount)
+							if err := markDonationProcessed(donationID); err != nil {
+								log.Println("[WARN] Не удалось отметить donation_id как обработанный:", donationID, err)
+							}
+						}
+					}
+				}
+				// --- КОНЕЦ: Проверка и начисление баланса ---
+
 				if err := sendDataRetry(tx); err != nil {
 					log.Println("[WARN] Failed to send transaction:", err)
 					failed = err
@@ -194,6 +257,32 @@ func getTributeAuth(client *telegram.Client, reset bool) (string, error) {
 	return auth, nil
 }
 
+// Подключение к базе данных PostgreSQL
+func openDB() (*sql.DB, error) {
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		settings.DBHost,
+		settings.DBPort,
+		settings.DBUser,
+		settings.DBPassword,
+		settings.DBName,
+	)
+	return sql.Open("postgres", connStr)
+}
+
+// Обновление баланса пользователя по tg_id
+func addBalanceByTgID(tgID int64, amount float64) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Обновляем баланс пользователя
+	_, err = db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
+	return err
+}
+
 func main() {
 	client, err := tg.RunningClient()
 	if err != nil {
@@ -201,11 +290,11 @@ func main() {
 	}
 	defer client.Stop()
 
-    // // <<< ДОБАВЛЯЕМ ЗАДЕРЖКУ ЗДЕСЬ >>>
-    // log.Println("Waiting a bit for synchronization...")
-    // time.Sleep(10 * time.Second) // Ждем, например, 10 секунд
-    // log.Println("Done waiting.")
-    // // <<< КОНЕЦ ЗАДЕРЖКИ >>>
+	// // <<< ДОБАВЛЯЕМ ЗАДЕРЖКУ ЗДЕСЬ >>>
+	// log.Println("Waiting a bit for synchronization...")
+	// time.Sleep(10 * time.Second) // Ждем, например, 10 секунд
+	// log.Println("Done waiting.")
+	// // <<< КОНЕЦ ЗАДЕРЖКИ >>>
 
 	botUser, err := client.ResolveUsername(settings.BotUsername)
 	if err != nil {

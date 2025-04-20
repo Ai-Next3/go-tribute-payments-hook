@@ -1,4 +1,4 @@
-modules = ["go-1.23"]
+modules = ["go-1.21"]
 run = "go run"
 
 [nix]
@@ -6,3 +6,8 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "go run"]
+
+[packager]
+packages = [
+  "github.com/lib/pq"
+]
