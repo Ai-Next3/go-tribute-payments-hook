@@ -7,6 +7,8 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "cd app && go run main.go"]
+deploymentTarget = "gce"
+ignorePorts = true
 
 [packager]
 packages = [
