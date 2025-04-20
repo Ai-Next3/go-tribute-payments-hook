@@ -9,20 +9,28 @@ import (
 
 	"github.com/amarnathcjd/gogram/telegram"
 	"github.com/joho/godotenv" // Для чтения .env файла
+
+// Вспомогательная функция для получения значения переменной среды из разных источников
+func getEnvValue(upperCaseKey, lowerCaseKey string) string {
+	value := os.Getenv(upperCaseKey)
+	if value == "" {
+		value = os.Getenv(lowerCaseKey)
+	}
+	return value
+}
+
+
 )
 
 func checkPeer() {
-	// Загружаем переменные из .env файла
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Printf("Error loading .env file: %v", err)
-		return
-	}
-
-	apiIDStr := os.Getenv("TELEGRAM_API_ID")
-	apiHash := os.Getenv("TELEGRAM_API_HASH")
-	sessionPath := os.Getenv("TELEGRAM_SESSION_PATH")
-	forwardToStr := os.Getenv("TELEGRAM_FORWARD_TO")
+	// Загружаем переменные из .env файла с возможной заменой через Replit Secrets
+	_ = godotenv.Load(".env") // Игнорируем ошибку, т.к. переменные могут быть в Secrets
+	
+	// Проверяем переменные как в .env, так и в нижнем регистре (как ожидает settings.go)
+	apiIDStr := getEnvValue("TELEGRAM_API_ID", "telegram_api_id")
+	apiHash := getEnvValue("TELEGRAM_API_HASH", "telegram_api_hash") 
+	sessionPath := getEnvValue("TELEGRAM_SESSION_PATH", "telegram_session_path")
+	forwardToStr := getEnvValue("TELEGRAM_FORWARD_TO", "telegram_forward_to")
 
 	if apiIDStr == "" || apiHash == "" || sessionPath == "" || forwardToStr == "" {
 		log.Println("Error: Missing required environment variables")
