@@ -1,14 +1,15 @@
 language = "go"
 
 modules = ["go-1.23"]
-run = "go run app/main.go"
+run = "cd app && go run main.go"
+entrypoint = "app/main.go"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "cd app && go run main.go"]
-build = ["sh", "-c", "mkdir -p app/session && cd app && go mod download"]
+build = ["sh", "-c", "mkdir -p app/session && cd app && go mod tidy && go mod download"]
 deploymentTarget = "gce"
 ignorePorts = true
 
