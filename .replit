@@ -1,25 +1,25 @@
-modules = ["go-1.21"]
+language = "go"
+
+modules = ["go-1.23"]
 run = "cd app && go run main.go"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "cd app && go run main.go"]
+run = ["cd", "app", "&&", "go", "run", "main.go"]
+build = ["sh", "-c", "cd app"]
 deploymentTarget = "gce"
 ignorePorts = true
 
 [packager]
-packages = [
-  "github.com/lib/pq"
-]
+packages = ["github.com/lib/pq"]
 
 [workflows]
 runButton = "Run App"
 
 [[workflows.workflow]]
 name = "Run App"
-author = 41006223
 mode = "sequential"
 
 [[workflows.workflow.tasks]]

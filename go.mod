@@ -1,0 +1,16 @@
+module go-tribute-api
+
+go 1.23
+
+toolchain go1.23.2
+
+require (
+    github.com/amarnathcjd/gogram v0.0.0-20241012182254-0b9055ee7a97
+    github.com/lib/pq v1.10.9 // 👉 вот это строка — PostgreSQL драйвер
+    github.com/natefinch/atomic v1.0.1
+
+    // косвенные зависимости (оставь как есть)
+    github.com/joho/godotenv v1.5.1 // indirect
+    github.com/pkg/errors v0.9.1 // indirect
+    golang.org/x/net v0.30.0 // indirect
+)
