@@ -117,7 +117,7 @@ func sendTransactions(transactions []tribute.Transaction) error {
 				desc := tx.DonationRequest.Description
 				donationID := tx.Donation.ID
 				if desc != "" &&
-					strings.Contains(desc, "Ваша благодарность вернется к вам в полном объеме в приложении chatGPT") &&
+					strings.Contains(desc, "Ваша благодарность вернется к вам на счет в полном объеме в приложении GPT³") &&
 					donationID != 0 {
 
 					processed, err := isDonationProcessed(donationID)

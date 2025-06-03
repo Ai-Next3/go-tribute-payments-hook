@@ -1,20 +1,16 @@
 language = "go"
 
-modules = ["go-1.23"]
-run = "cd app && go run main.go"
-entrypoint = "app/main.go"
+modules  = ["go-1.23"]
+run      = "go run ./app"           # локальная кнопка «Run»
 
 [nix]
 channel = "stable-24_05"
 
-[deployment]
-run = ["sh", "-c", "cd app && go run main.go"]
-build = ["sh", "-c", "mkdir -p app/session && cd app && go mod tidy && go mod download"]
+[deployment]                        # Reserved VM  ▸  Background Worker
+processType = "worker"        # ← ключевое поле
+run = ["go", "run", "./app"]
 deploymentTarget = "gce"
 ignorePorts = true
-
-[packager]
-packages = ["github.com/lib/pq"]
 
 [workflows]
 runButton = "Run App"
@@ -25,4 +21,4 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd app && go run main.go"
+args = "go run ./app"
