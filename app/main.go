@@ -106,7 +106,10 @@ func sendTransactions(transactions []tribute.Transaction) error {
 		return sendDataRetry(data)
 	} else {
 		waiter := sync.WaitGroup{}
-		var failed error
+		var (
+			failed     error
+			failedLock sync.Mutex
+		)
 		for _, transaction := range transactions {
 			waiter.Add(1)
 			go func(tx tribute.Transaction) {
@@ -148,7 +151,11 @@ func sendTransactions(transactions []tribute.Transaction) error {
 
 				if err := sendDataRetry(tx); err != nil {
 					log.Println("[WARN] Failed to send transaction:", err)
-					failed = err
+					failedLock.Lock()
+					if failed == nil {
+						failed = err
+					}
+					failedLock.Unlock()
 				}
 			}(transaction)
 		}
