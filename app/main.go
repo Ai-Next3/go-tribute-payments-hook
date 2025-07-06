@@ -116,6 +116,14 @@ func sendTransactions(transactions []tribute.Transaction) error {
 				defer waiter.Done()
 				log.Println("Sending transaction", tx.ID)
 
+				// --- НАЧАЛО: Сохранение доната в таблицу donations ---
+				if err := saveDonationToTable(tx); err != nil {
+					log.Println("[WARN] Не удалось сохранить донат в таблицу donations:", err)
+				} else {
+					log.Println("Донат успешно сохранен в таблицу donations, ID:", tx.ID)
+				}
+				// --- КОНЕЦ: Сохранение доната в таблицу donations ---
+
 				// --- НАЧАЛО: Проверка и начисление баланса ---
 				desc := tx.DonationRequest.Description
 				donationID := tx.Donation.ID
@@ -287,6 +295,36 @@ func addBalanceByTgID(tgID int64, amount float64) error {
 
 	// Обновляем баланс пользователя
 	_, err = db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
+	return err
+}
+
+// Сохранение информации о донате в таблицу donations
+func saveDonationToTable(transaction tribute.Transaction) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Преобразуем транзакцию в JSON для поля raw_data
+	rawData, err := json.Marshal(transaction)
+	if err != nil {
+		return err
+	}
+
+	// Вставляем данные в таблицу donations
+	_, err = db.Exec(`
+		INSERT INTO donations (id, tg_id, amount, currency, event_type, raw_data, created_at) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (id) DO NOTHING`,
+		transaction.ID,
+		transaction.User.TelegramID,
+		transaction.Amount,
+		transaction.Currency,
+		transaction.Type,
+		string(rawData),
+		time.Unix(transaction.CreatedAt, 0),
+	)
 	return err
 }
 
