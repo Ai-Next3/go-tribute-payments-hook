@@ -550,3 +550,80 @@ _**Assistant**_
 
 ---
 
+_**User**_
+
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+exec /app/tribute-hook: no such file or directory
+
+---
+
+_**Assistant**_
+
+
+
+---
+
+Понял. Ошибка `exec /app/tribute-hook: no such file or directory` очень коварная.
+
+Она **не всегда** означает, что самого файла `/app/tribute-hook` нет. Очень часто в минималистичных Docker-образах (как `distroless/static`, который я предложил) эта ошибка означает, что **не найден системный загрузчик, от которого зависит твое приложение**.
+
+**Простыми словами:**
+
+*   По умолчанию, когда Go собирает программу для Linux, он делает ее "динамической". Это значит, что программа ожидает найти в системе стандартные библиотеки (например, `libc`) для работы с сетью, файлами и т.д.
+*   Образ `gcr.io/distroless/static-debian12`, который мы используем, **полностью пустой**. В нем нет этих стандартных библиотек. Он рассчитан на запуск только "полностью статических" программ, у которых все необходимое встроено внутрь.
+*   Когда контейнер пытается запустить твою программу, она говорит: "Эй, система, дай мне библиотеку `libc`!", а система (контейнер) отвечает: "У меня нет такой". Из-за этого и возникает ошибка `no such file or directory` — не найден не сам файл, а его зависимость.
+
+### Как это исправить?
+
+Нам нужно сказать компилятору Go, чтобы он встроил абсолютно все зависимости прямо в наш файл `tribute-hook`, сделав его на 100% автономным.
+
+Это делается очень просто — добавлением `CGO_ENABLED=0` перед командой сборки.
+
+Давай я исправлю `Dockerfile` еще раз.
+
+---
+
+```diff
+  COPY ./app ./app
+  
+- # Собираем приложение
+- RUN cd app && go build -o /tribute-hook .
++ # Собираем приложение как полностью статический бинарный файл
++ RUN cd app && CGO_ENABLED=0 go build -o /tribute-hook .
+  
+  # Этап 2: Создание финального, легковесного образа
+```
+
+---
+
+Готово, я обновил `Dockerfile`, добавив флаг `CGO_ENABLED=0` в команду сборки.
+
+Теперь твое приложение будет собираться как полностью статический бинарный файл, который не требует никаких внешних библиотек и сможет запуститься в минималистичном `distroless` образе.
+
+### Что делать дальше:
+
+1.  **Сохрани изменения в Git:**
+    ```bash
+    git add Dockerfile
+    git commit -m "fix: Build a fully static binary for distroless image"
+    ```
+
+2.  **Отправь изменения на сервер:**
+    ```bash
+    git push
+    ```
+
+После этого Coolify начнет новую сборку с исправленным `Dockerfile`. На этот раз ошибка `exec: no such file or directory` должна исчезнуть, и приложение должно успешно запуститься.
+
+---
+

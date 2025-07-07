@@ -8,8 +8,8 @@ RUN go mod download
 # Копируем все файлы приложения, включая папку session
 COPY ./app ./app
 
-# Собираем приложение
-RUN cd app && go build -o /tribute-hook .
+# Собираем приложение как полностью статический бинарный файл
+RUN cd app && CGO_ENABLED=0 go build -o /tribute-hook .
 
 # Этап 2: Создание финального, легковесного образа
 FROM gcr.io/distroless/static-debian12
