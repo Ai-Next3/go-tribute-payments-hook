@@ -27,6 +27,7 @@ import (
 )
 
 var newTXLock = &sync.Mutex{}
+var db *sql.DB
 
 func fetchNewTransactions(client *telegram.Client, retry bool) {
 	if !retry {
@@ -87,26 +88,14 @@ func fetchNewTransactions(client *telegram.Client, retry bool) {
 
 // Проверка, был ли donation уже обработан
 func isDonationProcessed(donationID int64) (bool, error) {
-	db, err := openDB()
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
-
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM processed_donations WHERE donation_id = $1)", donationID).Scan(&exists)
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM processed_donations WHERE donation_id = $1)", donationID).Scan(&exists)
 	return exists, err
 }
 
 // Отметить donation как обработанный
 func markDonationProcessed(donationID int64) error {
-	db, err := openDB()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	_, err = db.Exec("INSERT INTO processed_donations (donation_id) VALUES ($1) ON CONFLICT DO NOTHING", donationID)
+	_, err := db.Exec("INSERT INTO processed_donations (donation_id) VALUES ($1) ON CONFLICT DO NOTHING", donationID)
 	return err
 }
 
@@ -304,7 +293,7 @@ func getTributeAuth(client *telegram.Client, reset bool) (string, error) {
 }
 
 // Подключение к базе данных PostgreSQL
-func openDB() (*sql.DB, error) {
+func initDB() error {
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		settings.DBHost,
@@ -313,30 +302,28 @@ func openDB() (*sql.DB, error) {
 		settings.DBPassword,
 		settings.DBName,
 	)
-	return sql.Open("postgres", connStr)
+	var err error
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		return err
+	}
+
+	// Настройка пула подключений
+	db.SetMaxOpenConns(25)                 // Максимальное количество открытых подключений
+	db.SetMaxIdleConns(25)                 // Максимальное количество простаивающих подключений
+	db.SetConnMaxLifetime(5 * time.Minute) // Максимальное время жизни подключения
+
+	return db.Ping() // Проверяем, что подключение действительно работает
 }
 
 // Обновление баланса пользователя по tg_id
 func addBalanceByTgID(tgID int64, amount float64) error {
-	db, err := openDB()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Обновляем баланс пользователя
-	_, err = db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
+	_, err := db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
 	return err
 }
 
 // Сохранение информации о донате в таблицу donations
 func saveDonationToTable(transaction tribute.Transaction) error {
-	db, err := openDB()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
 	// Преобразуем транзакцию в JSON для поля raw_data
 	rawData, err := json.Marshal(transaction)
 	if err != nil {
@@ -365,6 +352,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	slog.Info("Starting service...")
+
+	// Инициализация пула подключений к БД
+	if err := initDB(); err != nil {
+		slog.Error("Failed to initialize database connection pool", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Database connection pool initialized successfully.")
 
 	client, err := tg.RunningClient()
 	if err != nil {
