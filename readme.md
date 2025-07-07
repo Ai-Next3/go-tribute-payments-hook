@@ -1,40 +1,79 @@
-# Telegram Tribute bot hook
+# Хук для обработки платежей Telegram Tribute
 
-Accepts messages from [@tribute](https://t.me/tribute) bot:
-* Forwards new messages into other chat
-* Sends new transactions into webhook url
-* Initially fetches all transactions
+Микросервис для работы с ботом [@tribute](https://t.me/tribute).
 
-Bot requires login into telegram account.
+## Основные функции
 
-> The microservice guarantees that each message will be delivered or forwarded at least once. However, it cannot guarantee that the message will only be delivered once. Handling duplicate messages is the responsibility of the webhook receiver (for example, use transaction ID as a unique constraint).
+*   Принимает сообщения от бота `@tribute`.
+*   Сохраняет информацию о транзакциях в базу данных PostgreSQL.
+*   Отправляет данные о новых транзакциях на указанный URL (вебхук).
+*   При первом запуске с чистой сессией запрашивает всю историю транзакций.
+*   Опционально может пересылать входящие сообщения в другой чат.
 
-## Docker
-Everything could be run in docker, just use image [izeberg/go-tribute-payments-hook](https://hub.docker.com/repository/docker/izeberg/go-tribute-payments-hook).
+> **Важно:** Микросервис гарантирует, что каждая транзакция будет обработана как минимум один раз. Обработка возможных дубликатов (например, при перезапуске после сбоя) должна быть реализована на стороне принимающего вебхука. Рекомендуется использовать ID транзакции как уникальный ключ.
 
-## Settings
-Application could be configured with environment variables defined here [./app/settings/settings.go](./app/settings/settings.go).
+---
 
-Here's example:
-```
-# get credentials from https://my.telegram.org
-telegram_api_id=<api_id>
-telegram_api_hash=<api_hash>
+## Настройка и развертывание в Coolify
 
-# peer id where messages will be accepted to processing
-telegram_incoming_from=@trubute
+Этот сервис оптимизирован для запуска в Docker-контейнере под управлением Coolify.
 
-# optional, this is where session will be stored (default /session)
-telegram_session_path=/session
+### 1. Переменные окружения (Environment Variables)
 
-# optional, peer id to forward message
-telegram_forward_to=1111111111
+Все настройки производятся через переменные окружения в интерфейсе Coolify.
 
-# optional url where HTTP POST with info will be sent
-webhook_url=https://example.com/tribute
-# optional basic auth parameters
-webhook_login=user
-webhook_password=pwd
-# optional hmac signature key for webhook's body
-webhook_signature_key=supersecretKey
-```
+#### Telegram
+*   `TELEGRAM_API_ID`: ID вашего приложения. Получить на [my.telegram.org](https://my.telegram.org).
+*   `TELEGRAM_API_HASH`: Хэш вашего приложения. Получить там же.
+*   `TELEGRAM_SESSION_PATH`: **Критически важный параметр!** Укажите абсолютный путь внутри контейнера, куда будет подключено постоянное хранилище. **Рекомендуемое значение: `/app/session`**.
+*   `TELEGRAM_INCOMING_FROM`: Имя пользователя бота, от которого принимаются сообщения. По умолчанию `@tribute`.
+*   `TELEGRAM_FORWARD_TO`: (Опционально) ID чата, куда будут пересылаться сообщения.
+
+#### База данных (PostgreSQL)
+*   `DB_HOST`: Адрес сервера БД.
+    *   Если БД запущена в другом Docker-контейнере на **этом же сервере**, используйте IP-адрес шлюза сети Docker (например, `172.17.0.1` или `10.0.0.1`). Чтобы узнать его, выполните на сервере команду `docker network inspect bridge | grep Gateway`.
+*   `DB_PORT`: Порт БД (например, `5432`).
+*   `DB_USER`: Имя пользователя БД.
+*   `DB_PASSWORD`: Пароль пользователя БД.
+*   `DB_NAME`: Название базы данных.
+
+#### Вебхук (Webhook)
+*   `WEBHOOK_URL`: (Опционально) URL, на который будут отправляться POST-запросы с данными транзакций.
+*   `WEBHOOK_LOGIN`, `WEBHOOK_PASSWORD`: (Опционально) Данные для Basic-аутентификации на вебхуке.
+*   `WEBHOOK_SIGNATURE_KEY`: (Опционально) Ключ для HMAC-подписи тела запроса.
+*   `WEBHOOK_SIGNATURE_HEADER`: (Опционально) Название заголовка для подписи. По умолчанию `X-Signature`.
+*   `WEBHOOK_BATCH`: Установите в `1`, чтобы отправлять транзакции пачками в виде JSON-массива.
+
+### 2. Постоянное хранилище (Storage)
+
+Сервису необходимо хранить файлы сессии Telegram, чтобы не проходить аутентификацию при каждом перезапуске.
+
+1.  В настройках сервиса в Coolify перейдите на вкладку **Storage**.
+2.  Добавьте новое хранилище (Add Volume Mount).
+3.  В поле **Destination Directory** укажите тот же путь, что и в переменной `TELEGRAM_SESSION_PATH` (например, `/app/session`).
+
+### 3. Первичная аутентификация в Telegram
+
+При первом запуске на новом сервере необходимо создать файл сессии, привязанный к IP-адресу этого сервера. Для этого используется специальная утилита, встроенная в Docker-образ.
+
+**Шаг 1: Подготовка к аутентификации**
+1.  Откройте `Dockerfile` проекта.
+2.  Временно измените базовый образ для финальной стадии с `gcr.io/distroless/static-debian12` на `debian:bullseye-slim`.
+3.  Временно измените команду `CMD` в конце файла на `CMD ["sleep", "infinity"]`.
+4.  Сохраните и отправьте изменения в Git. Coolify начнет развертывание. Контейнер запустится и будет "спать", не падая.
+
+**Шаг 2: Процесс аутентификации**
+1.  Когда "спящий" контейнер будет в статусе `running`, зайдите во вкладку **Terminal**.
+2.  (Рекомендуется) Очистите папку от старых файлов сессии: `rm /app/session/*`
+3.  Запустите утилиту: `/app/auth-tool`
+4.  Программа попросит ввести номер телефона и код подтверждения из Telegram.
+    > **Важно:** Не копируйте и не пересылайте сообщение с кодом в Telegram, иначе система безопасности заблокирует попытку входа. Вводите цифры руками.
+5.  После успешного сообщения `Authentication successful...` файл сессии будет создан в постоянном хранилище.
+
+**Шаг 3: Возврат в рабочий режим**
+1.  Верните `Dockerfile` в исходное состояние:
+    *   Базовый образ: `gcr.io/distroless/static-debian12`
+    *   Команда `CMD`: `CMD ["/app/tribute-hook"]`
+2.  Сохраните и отправьте изменения в Git.
+
+Coolify в последний раз пересоберет приложение, и оно запустится в штатном режиме, используя созданную сессию.
