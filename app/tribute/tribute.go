@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-tribute-api/settings"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -57,8 +58,11 @@ func FetchTransactions(tributeAuth string, lastKnownTxID int64) ([]Transaction, 
 	nextFrom := "0"
 	var maxTxID int64 = -1
 	var transactions []Transaction
+	page := 1
 
 	for {
+		logger := slog.With("page", page, "start_from", nextFrom)
+		logger.Info("Fetching transactions page")
 		resp, err := requestTransactionsRetry(tributeAuth, nextFrom)
 		if err != nil {
 			return transactions, maxTxID, err
@@ -70,31 +74,38 @@ func FetchTransactions(tributeAuth string, lastKnownTxID int64) ([]Transaction, 
 			if tx.ID > lastKnownTxID {
 				transactions = append(transactions, tx)
 			} else {
-				break
+				// Мы дошли до транзакций, которые уже видели,
+				// но нужно дойти до конца этой страницы.
+				// Если раскомментировать, остановится сразу, но может пропустить что-то.
+				// break
 			}
 		}
 
-		if resp.NextFrom == `` {
+		if resp.NextFrom == "" {
+			logger.Info("Finished fetching all transaction pages.")
 			break
 		} else {
 			nextFrom = resp.NextFrom
+			page++
 		}
 	}
 	return transactions, maxTxID, nil
 }
 
 func requestTransactionsRetry(tributeAuth string, nextFrom string) (*TransactionsResponse, error) {
-	attempt := 0
-	for {
-		attempt++
-		if resp, err := requestTransactions(tributeAuth, nextFrom); err == nil {
+	var lastErr error
+	for attempt := 1; attempt <= settings.FetchRetryCount; attempt++ {
+		resp, err := requestTransactions(tributeAuth, nextFrom)
+		if err == nil {
 			return resp, nil
-		} else if attempt >= settings.FetchRetryCount {
-			return nil, err
 		}
-		time.Sleep(time.Second / 4)
-		continue
+		lastErr = err
+		slog.Warn("Failed to request transactions", "attempt", attempt, "error", err)
+		if attempt < settings.FetchRetryCount {
+			time.Sleep(time.Second / 4)
+		}
 	}
+	return nil, lastErr
 }
 
 func requestTransactions(tributeAuth string, nextFrom string) (*TransactionsResponse, error) {
@@ -113,7 +124,7 @@ func requestTransactions(tributeAuth string, nextFrom string) (*TransactionsResp
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("status code %d", resp.StatusCode)
 	}
 	data, err := io.ReadAll(resp.Body)

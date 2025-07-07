@@ -12,7 +12,7 @@ import (
 	"go-tribute-api/tg"
 	"go-tribute-api/tribute"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -38,13 +38,13 @@ func fetchNewTransactions(client *telegram.Client, retry bool) {
 
 	tributeAuth, err := getTributeAuth(client, retry)
 	if err != nil {
-		log.Println("Failed to read last known transaction ID", err)
+		slog.Error("Failed to get tribute auth", "error", err)
 		return
 	}
 
 	savedTxID, err := readLastKnownTxID()
 	if err != nil {
-		log.Println("[WARN] Failed to read last known transaction ID", err)
+		slog.Warn("Failed to read last known transaction ID", "error", err)
 	}
 
 	var transactions []tribute.Transaction
@@ -55,32 +55,32 @@ func fetchNewTransactions(client *telegram.Client, retry bool) {
 		transactions, maxTxID, err = tribute.FetchTransactions(tributeAuth, savedTxID)
 		if err == nil {
 			// Успех, выходим из цикла
-			log.Println("Successfully fetched transactions.")
+			slog.Info("Successfully fetched transactions", "count", len(transactions))
 			break
 		}
 
-		log.Printf("[WARN] Failed to fetch transactions (attempt %d/%d): %v", i, settings.FetchRetryCount+1, err)
+		slog.Warn("Failed to fetch transactions", "attempt", i, "total_attempts", settings.FetchRetryCount+1, "error", err)
 
 		if i > settings.FetchRetryCount {
 			// Это была последняя попытка, выходим с ошибкой
-			log.Println("[ERROR] All attempts to fetch transactions failed. Giving up.")
+			slog.Error("All attempts to fetch transactions failed. Giving up.")
 			return
 		}
 
 		// Ждем перед следующей попыткой
 		sleepDuration := time.Second * time.Duration(5*i) // Увеличиваем задержку с каждой попыткой (5s, 10s, 15s)
-		log.Printf("Waiting for %v before retrying...", sleepDuration)
+		slog.Info("Waiting before retrying...", "duration", sleepDuration)
 		time.Sleep(sleepDuration)
 	}
 
 	if err := sendTransactions(transactions); err != nil {
-		log.Println("Failed to send transactions:", err)
+		slog.Error("Failed to send transactions", "error", err)
 		return
 	}
 
 	if maxTxID > savedTxID {
 		if err := saveLastKnownTxID(maxTxID); err != nil {
-			log.Println("[WARN] Failed to save last known transaction ID:", err)
+			slog.Warn("Failed to save last known transaction ID", "error", err)
 		}
 	}
 }
@@ -111,14 +111,18 @@ func markDonationProcessed(donationID int64) error {
 }
 
 func sendTransactions(transactions []tribute.Transaction) error {
-	if len(transactions) == 0 || settings.WebhookURL == "" {
-		log.Println("No new transactions")
+	if len(transactions) == 0 {
 		return nil
 	}
+	if settings.WebhookURL == "" {
+		slog.Info("Webhook URL not set, skipping sending transactions.")
+		return nil
+	}
+
 	if settings.WebhookBatch {
-		log.Println("Sending batched transactions to webhook:", len(transactions))
+		slog.Info("Sending batched transactions to webhook", "count", len(transactions))
 		data, _ := json.Marshal(transactions)
-		return sendDataRetry(data)
+		return sendDataRetry(data, "batch")
 	} else {
 		waiter := sync.WaitGroup{}
 		var (
@@ -129,13 +133,14 @@ func sendTransactions(transactions []tribute.Transaction) error {
 			waiter.Add(1)
 			go func(tx tribute.Transaction) {
 				defer waiter.Done()
-				log.Println("Sending transaction", tx.ID)
+				logger := slog.With("transaction_id", tx.ID, "user_id", tx.User.TelegramID)
+				logger.Info("Processing transaction")
 
 				// --- НАЧАЛО: Сохранение доната в таблицу donations ---
 				if err := saveDonationToTable(tx); err != nil {
-					log.Println("[WARN] Не удалось сохранить донат в таблицу donations:", err)
+					logger.Warn("Failed to save donation to donations table", "error", err)
 				} else {
-					log.Println("Донат успешно сохранен в таблицу donations, ID:", tx.ID)
+					logger.Info("Donation saved to donations table")
 				}
 				// --- КОНЕЦ: Сохранение доната в таблицу donations ---
 
@@ -148,32 +153,35 @@ func sendTransactions(transactions []tribute.Transaction) error {
 
 					processed, err := isDonationProcessed(donationID)
 					if err != nil {
-						log.Println("[WARN] Не удалось проверить donation_id:", donationID, err)
+						logger.Warn("Failed to check if donation was processed", "donation_id", donationID, "error", err)
 						return
 					}
 					if processed {
-						log.Println("Донат уже обработан, пропускаем:", donationID)
+						logger.Info("Donation already processed, skipping", "donation_id", donationID)
 						return
 					}
 
 					tgID := tx.User.TelegramID
+					// ИСПРАВЛЕНИЕ: Берем сумму из фактического доната (Donation),
+					// а не из запроса (DonationRequest), чтобы избежать ошибки
+					// с суммой по умолчанию (100) при обработке старых транзакций.
 					amount := tx.Donation.Amount
 					if tgID != 0 && amount > 0 {
 						err := addBalanceByTgID(tgID, amount)
 						if err != nil {
-							log.Println("[WARN] Не удалось начислить баланс пользователю:", tgID, err)
+							logger.Warn("Failed to add balance to user", "error", err)
 						} else {
-							log.Println("Баланс успешно начислен пользователю:", tgID, "на сумму:", amount)
+							logger.Info("Balance added to user", "amount", amount)
 							if err := markDonationProcessed(donationID); err != nil {
-								log.Println("[WARN] Не удалось отметить donation_id как обработанный:", donationID, err)
+								logger.Warn("Failed to mark donation as processed", "donation_id", donationID, "error", err)
 							}
 						}
 					}
 				}
 				// --- КОНЕЦ: Проверка и начисление баланса ---
 
-				if err := sendDataRetry(tx); err != nil {
-					log.Println("[WARN] Failed to send transaction:", err)
+				if err := sendDataRetry(tx, fmt.Sprintf("tx_%d", tx.ID)); err != nil {
+					logger.Warn("Failed to send transaction to webhook", "error", err)
 					failedLock.Lock()
 					if failed == nil {
 						failed = err
@@ -188,13 +196,15 @@ func sendTransactions(transactions []tribute.Transaction) error {
 	}
 }
 
-func sendDataRetry(data interface{}) error {
+func sendDataRetry(data interface{}, logContext string) error {
 	if data == nil {
 		return nil
 	}
+	logger := slog.With("context", logContext)
 
 	body, err := json.Marshal(data)
 	if err != nil {
+		logger.Error("Failed to marshal data for webhook", "error", err)
 		return err
 	}
 
@@ -205,16 +215,18 @@ func sendDataRetry(data interface{}) error {
 		signature = hex.EncodeToString(signer.Sum(nil))
 	}
 
-	attempt := 0
-	for {
-		attempt++
-		if err := sendData(body, signature); err == nil {
+	var lastErr error
+	for attempt := 1; attempt <= settings.FetchRetryCount; attempt++ {
+		lastErr = sendData(body, signature)
+		if lastErr == nil {
 			return nil
-		} else if attempt >= settings.FetchRetryCount {
-			return err
 		}
-		time.Sleep(time.Second / 4)
+		logger.Warn("Failed to send data to webhook", "attempt", attempt, "error", lastErr)
+		if attempt < settings.FetchRetryCount {
+			time.Sleep(time.Second / 4)
+		}
 	}
+	return lastErr
 }
 
 func sendData(body []byte, signature string) error {
@@ -238,13 +250,14 @@ func sendData(body []byte, signature string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode >= 300 {
 		return fmt.Errorf("status code %d", resp.StatusCode)
 	}
 	return nil
 }
 
 func saveLastKnownTxID(txID int64) error {
+	slog.Info("Saving last known transaction ID", "tx_id", txID)
 	return atomic.WriteFile(path.Join(settings.SessionPath, "last_known_tx.dat"), bytes.NewBuffer([]byte(strconv.FormatInt(txID, 10))))
 }
 
@@ -269,10 +282,12 @@ func getTributeAuth(client *telegram.Client, reset bool) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			slog.Info("Successfully loaded tribute.auth from cache.")
 			return string(data), nil
 		}
 	}
 
+	slog.Info("Requesting new tribute.auth token...")
 	webViewURL, err := tg.RequestBotWebView(client, settings.BotUsername)
 	if err != nil {
 		return "", err
@@ -281,8 +296,9 @@ func getTributeAuth(client *telegram.Client, reset bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	slog.Info("New tribute.auth token generated.")
 	if err := atomic.WriteFile(path.Join(settings.SessionPath, "tribute.auth"), bytes.NewBuffer([]byte(auth))); err != nil {
-		log.Println("[WARN] Failed to save tribute.auth:", err)
+		slog.Warn("Failed to save tribute.auth", "error", err)
 	}
 	return auth, nil
 }
@@ -344,49 +360,55 @@ func saveDonationToTable(transaction tribute.Transaction) error {
 }
 
 func main() {
+	// Инициализация логгера
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	slog.Info("Starting service...")
+
 	client, err := tg.RunningClient()
 	if err != nil {
-		log.Fatalln(err)
+		slog.Error("Failed to get running client", "error", err)
+		os.Exit(1)
 	}
 	defer client.Stop()
 
-	// // <<< ДОБАВЛЯЕМ ЗАДЕРЖКУ ЗДЕСЬ >>>
-	// log.Println("Waiting a bit for synchronization...")
-	// time.Sleep(10 * time.Second) // Ждем, например, 10 секунд
-	// log.Println("Done waiting.")
-	// // <<< КОНЕЦ ЗАДЕРЖКИ >>>
-
+	slog.Info("Resolving bot username", "username", settings.BotUsername)
 	botUser, err := client.ResolveUsername(settings.BotUsername)
 	if err != nil {
-		log.Fatalln(err)
+		slog.Error("Failed to resolve bot username", "username", settings.BotUsername, "error", err)
+		os.Exit(1)
 	}
 
 	var forwardPeer any = nil
 	if settings.ForwardTo != 0 {
 		if p, err := client.GetPeer(settings.ForwardTo); err != nil {
-			log.Println("Failed to fetch forward peer:", err)
+			slog.Warn("Failed to fetch forward peer", "peer_id", settings.ForwardTo, "error", err)
 		} else {
 			forwardPeer = p
+			slog.Info("Successfully fetched forward peer", "peer_id", settings.ForwardTo)
 		}
 	}
 
 	client.On(telegram.OnMessage, func(m *telegram.NewMessage) error {
+		msgLogger := slog.With("message_id", m.Message.ID)
 		if m.Message.Out {
 			return nil
 		}
 		if forwardPeer != nil {
-			log.Println("Forward message", m.Message.ID, "to", settings.ForwardTo)
+			msgLogger.Info("Forwarding message", "to_peer_id", settings.ForwardTo)
 			if _, err := m.Client.Forward(forwardPeer, m.Peer, []int32{m.Message.ID}); err != nil {
-				log.Println("[WARN] Failed to forward message", m.Message.ID, err)
+				msgLogger.Warn("Failed to forward message", "error", err)
 			}
 		}
+		msgLogger.Info("Triggering transaction fetch from new message.")
 		fetchNewTransactions(m.Client, false)
 		return nil
 	}, telegram.FilterUsers(botUser.(*telegram.UserObj).ID))
 
-	log.Println("Fetching new transactions")
+	slog.Info("Performing initial fetch of new transactions")
 	go fetchNewTransactions(client, false)
 
-	log.Println("Wait for messages from", settings.BotUsername)
+	slog.Info("Service started. Waiting for messages...", "from_bot", settings.BotUsername)
 	client.Idle()
 }

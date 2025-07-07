@@ -3,6 +3,7 @@ package tg
 import (
 	"fmt"
 	"go-tribute-api/settings"
+	"log/slog"
 	"os"
 	"path"
 
@@ -41,6 +42,7 @@ func RequestBotWebView(client *telegram.Client, username string) (*telegram.WebV
 }
 
 func RunningClient() (*telegram.Client, error) {
+	slog.Info("Initializing Telegram client...")
 	os.MkdirAll(settings.SessionPath, os.ModePerm)
 
 	client, err := telegram.NewClient(telegram.ClientConfig{
@@ -56,10 +58,6 @@ func RunningClient() (*telegram.Client, error) {
 	if err := client.Start(); err != nil {
 		return nil, err
 	}
-
-	if err := client.AuthPrompt(); err != nil {
-		defer client.Stop()
-		return nil, err
-	}
+	slog.Info("Telegram client started successfully.")
 	return client, nil
 }
