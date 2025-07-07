@@ -627,3 +627,86 @@ _**Assistant**_
 
 ---
 
+_**User**_
+
+теперь Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+Enter phone number (with country code [+42xxx]) or bot token: Invalid response, try again
+2025/07/07 18:43:45 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:45 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:47 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:43:49 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:49 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:49 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:43:51 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:51 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:51 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:43:53 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:53 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:53 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:43:55 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:55 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:55 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:43:58 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:43:58 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:43:58 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:44:03 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:44:03 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:44:04 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+2025/07/07 18:44:11 [info]  gogram [mtproto] - connecting to [149.154.167.91:443] - <Tcp> ...
+2025/07/07 18:44:11 [info]  gogram [mtproto] - connection to [149.154.167.91:443] - <Tcp> established
+2025/07/07 18:44:12 resolving username: sending ContactsResolveUsername: [AUTH_KEY_UNREGISTERED] The key is not registered in the system (code 401)
+
+---
+
+_**Assistant**_
+
+
+
+---
+

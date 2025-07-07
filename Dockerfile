@@ -8,8 +8,11 @@ RUN go mod download
 # Копируем все файлы приложения, включая папку session
 COPY ./app ./app
 
-# Собираем приложение как полностью статический бинарный файл
+# Собираем основное приложение
 RUN cd app && CGO_ENABLED=0 go build -o /tribute-hook .
+
+# Собираем инструмент для аутентификации
+RUN cd app && CGO_ENABLED=0 go build -o /auth-tool ./cmd/auth
 
 # Этап 2: Создание финального, легковесного образа
 FROM gcr.io/distroless/static-debian12
@@ -19,6 +22,9 @@ WORKDIR /app
 
 # Копируем скомпилированное приложение из этапа сборки
 COPY --from=builder /tribute-hook .
+
+# Копируем инструмент аутентификации
+COPY --from=builder /auth-tool .
 
 # Запускаем приложение
 CMD ["/app/tribute-hook"]
