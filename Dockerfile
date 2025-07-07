@@ -15,7 +15,8 @@ RUN cd app && CGO_ENABLED=0 go build -o /tribute-hook .
 RUN cd app && CGO_ENABLED=0 go build -o /auth-tool ./cmd/auth
 
 # Этап 2: Создание финального, легковесного образа
-FROM gcr.io/distroless/static-debian12
+# ВРЕМЕННО используем debian:bullseye-slim, потому что в нем есть команда "sleep"
+FROM debian:bullseye-slim
 
 # Создаем рабочую директорию
 WORKDIR /app
