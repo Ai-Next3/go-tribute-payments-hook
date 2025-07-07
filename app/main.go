@@ -47,15 +47,30 @@ func fetchNewTransactions(client *telegram.Client, retry bool) {
 		log.Println("[WARN] Failed to read last known transaction ID", err)
 	}
 
-	transactions, maxTxID, err := tribute.FetchTransactions(tributeAuth, savedTxID)
-	if err != nil {
-		if retry {
-			log.Println("[WARN] Failed to fetch transactions, will reset tribute tokens:", err)
-			fetchNewTransactions(client, true)
-		} else {
-			log.Println("Failed to fetch transactions:", err)
+	var transactions []tribute.Transaction
+	var maxTxID int64
+
+	// Улучшенная логика с повторными попытками
+	for i := 1; i <= settings.FetchRetryCount+1; i++ {
+		transactions, maxTxID, err = tribute.FetchTransactions(tributeAuth, savedTxID)
+		if err == nil {
+			// Успех, выходим из цикла
+			log.Println("Successfully fetched transactions.")
+			break
 		}
-		return
+
+		log.Printf("[WARN] Failed to fetch transactions (attempt %d/%d): %v", i, settings.FetchRetryCount+1, err)
+
+		if i > settings.FetchRetryCount {
+			// Это была последняя попытка, выходим с ошибкой
+			log.Println("[ERROR] All attempts to fetch transactions failed. Giving up.")
+			return
+		}
+
+		// Ждем перед следующей попыткой
+		sleepDuration := time.Second * time.Duration(5*i) // Увеличиваем задержку с каждой попыткой (5s, 10s, 15s)
+		log.Printf("Waiting for %v before retrying...", sleepDuration)
+		time.Sleep(sleepDuration)
 	}
 
 	if err := sendTransactions(transactions); err != nil {
