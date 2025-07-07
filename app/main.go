@@ -28,33 +28,7 @@ import (
 
 var newTXLock = &sync.Mutex{}
 
-// initDB создает и проверяет пул подключений к базе данных.
-// Эта функция вызывается один раз при старте приложения.
-func initDB() (*sql.DB, error) {
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		settings.DBHost,
-		settings.DBPort,
-		settings.DBUser,
-		settings.DBPassword,
-		settings.DBName,
-	)
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Проверяем, что соединение с БД действительно установлено.
-	if err = db.Ping(); err != nil {
-		db.Close() // Закрываем, если пинг не прошел
-		return nil, err
-	}
-
-	slog.Info("Database connection pool established successfully.")
-	return db, nil
-}
-
-func fetchNewTransactions(db *sql.DB, client *telegram.Client, retry bool) {
+func fetchNewTransactions(client *telegram.Client, retry bool) {
 	if !retry {
 		if !newTXLock.TryLock() {
 			return
@@ -99,7 +73,7 @@ func fetchNewTransactions(db *sql.DB, client *telegram.Client, retry bool) {
 		time.Sleep(sleepDuration)
 	}
 
-	if err := sendTransactions(db, transactions); err != nil {
+	if err := sendTransactions(transactions); err != nil {
 		slog.Error("Failed to send transactions", "error", err)
 		return
 	}
@@ -112,19 +86,31 @@ func fetchNewTransactions(db *sql.DB, client *telegram.Client, retry bool) {
 }
 
 // Проверка, был ли donation уже обработан
-func isDonationProcessed(db *sql.DB, donationID int64) (bool, error) {
+func isDonationProcessed(donationID int64) (bool, error) {
+	db, err := openDB()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM processed_donations WHERE donation_id = $1)", donationID).Scan(&exists)
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM processed_donations WHERE donation_id = $1)", donationID).Scan(&exists)
 	return exists, err
 }
 
 // Отметить donation как обработанный
-func markDonationProcessed(db *sql.DB, donationID int64) error {
-	_, err := db.Exec("INSERT INTO processed_donations (donation_id) VALUES ($1) ON CONFLICT DO NOTHING", donationID)
+func markDonationProcessed(donationID int64) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO processed_donations (donation_id) VALUES ($1) ON CONFLICT DO NOTHING", donationID)
 	return err
 }
 
-func sendTransactions(db *sql.DB, transactions []tribute.Transaction) error {
+func sendTransactions(transactions []tribute.Transaction) error {
 	if len(transactions) == 0 {
 		return nil
 	}
@@ -151,7 +137,7 @@ func sendTransactions(db *sql.DB, transactions []tribute.Transaction) error {
 				logger.Info("Processing transaction")
 
 				// --- НАЧАЛО: Сохранение доната в таблицу donations ---
-				if err := saveDonationToTable(db, tx); err != nil {
+				if err := saveDonationToTable(tx); err != nil {
 					logger.Warn("Failed to save donation to donations table", "error", err)
 				} else {
 					logger.Info("Donation saved to donations table")
@@ -165,7 +151,7 @@ func sendTransactions(db *sql.DB, transactions []tribute.Transaction) error {
 					strings.Contains(desc, "Ваша благодарность вернется к вам на счет в полном объеме в приложении GPT³") &&
 					donationID != 0 {
 
-					processed, err := isDonationProcessed(db, donationID)
+					processed, err := isDonationProcessed(donationID)
 					if err != nil {
 						logger.Warn("Failed to check if donation was processed", "donation_id", donationID, "error", err)
 						return
@@ -181,12 +167,12 @@ func sendTransactions(db *sql.DB, transactions []tribute.Transaction) error {
 					// с суммой по умолчанию (100) при обработке старых транзакций.
 					amount := tx.Donation.Amount
 					if tgID != 0 && amount > 0 {
-						err := addBalanceByTgID(db, tgID, amount)
+						err := addBalanceByTgID(tgID, amount)
 						if err != nil {
 							logger.Warn("Failed to add balance to user", "error", err)
 						} else {
 							logger.Info("Balance added to user", "amount", amount)
-							if err := markDonationProcessed(db, donationID); err != nil {
+							if err := markDonationProcessed(donationID); err != nil {
 								logger.Warn("Failed to mark donation as processed", "donation_id", donationID, "error", err)
 							}
 						}
@@ -317,14 +303,40 @@ func getTributeAuth(client *telegram.Client, reset bool) (string, error) {
 	return auth, nil
 }
 
+// Подключение к базе данных PostgreSQL
+func openDB() (*sql.DB, error) {
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		settings.DBHost,
+		settings.DBPort,
+		settings.DBUser,
+		settings.DBPassword,
+		settings.DBName,
+	)
+	return sql.Open("postgres", connStr)
+}
+
 // Обновление баланса пользователя по tg_id
-func addBalanceByTgID(db *sql.DB, tgID int64, amount float64) error {
-	_, err := db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
+func addBalanceByTgID(tgID int64, amount float64) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Обновляем баланс пользователя
+	_, err = db.Exec(`UPDATE users SET balance = balance + $1 WHERE tg_id = $2`, amount, tgID)
 	return err
 }
 
 // Сохранение информации о донате в таблицу donations
-func saveDonationToTable(db *sql.DB, transaction tribute.Transaction) error {
+func saveDonationToTable(transaction tribute.Transaction) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
 	// Преобразуем транзакцию в JSON для поля raw_data
 	rawData, err := json.Marshal(transaction)
 	if err != nil {
@@ -354,12 +366,20 @@ func main() {
 
 	slog.Info("Starting service...")
 
-	db, err := initDB()
+	// --- НАЧАЛО: Проверка подключения к базе данных ---
+	slog.Info("Checking database connection...")
+	db, err := openDB()
 	if err != nil {
-		slog.Error("Failed to initialize database connection pool", "error", err)
+		slog.Error("Failed to create DB connection object", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close() // Гарантируем, что пул соединений будет закрыт при выходе.
+	if err := db.Ping(); err != nil {
+		slog.Error("Failed to connect to the database", "error", err)
+		os.Exit(1)
+	}
+	db.Close() // Закрываем тестовое подключение
+	slog.Info("Database connection successful.")
+	// --- КОНЕЦ: Проверка подключения к базе данных ---
 
 	client, err := tg.RunningClient()
 	if err != nil {
@@ -397,12 +417,12 @@ func main() {
 			}
 		}
 		msgLogger.Info("Triggering transaction fetch from new message.")
-		go fetchNewTransactions(db, m.Client, false)
+		fetchNewTransactions(m.Client, false)
 		return nil
 	}, telegram.FilterUsers(botUser.(*telegram.UserObj).ID))
 
 	slog.Info("Performing initial fetch of new transactions")
-	go fetchNewTransactions(db, client, false)
+	go fetchNewTransactions(client, false)
 
 	slog.Info("Service started. Waiting for messages...", "from_bot", settings.BotUsername)
 	client.Idle()
