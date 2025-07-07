@@ -1,14 +1,24 @@
+# Этап 1: Сборка приложения
 FROM golang:1.23 AS builder
 
 WORKDIR /build
-COPY app/go.mod app/go.sum /build/
-RUN cd /build; go mod download
+COPY app/go.mod app/go.sum ./
+RUN go mod download
 
-COPY app /build/
-RUN cd /build/app; ls; go build -o /usr/bin/tribute-hook
+# Копируем все файлы приложения, включая папку session
+COPY ./app ./app
 
-FROM golang:1.23
+# Собираем приложение
+RUN cd app && go build -o /tribute-hook .
 
-COPY --from=builder /usr/bin/tribute-hook /usr/bin/
+# Этап 2: Создание финального, легковесного образа
+FROM gcr.io/distroless/static-debian12
 
-CMD ["/usr/bin/tribute-hook"]
+# Создаем рабочую директорию
+WORKDIR /app
+
+# Копируем скомпилированное приложение из этапа сборки
+COPY --from=builder /tribute-hook .
+
+# Запускаем приложение
+CMD ["/app/tribute-hook"]

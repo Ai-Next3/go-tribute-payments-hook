@@ -2,10 +2,11 @@ package tg
 
 import (
 	"fmt"
-	"github.com/amarnathcjd/gogram/telegram"
 	"go-tribute-api/settings"
 	"os"
 	"path"
+
+	"github.com/amarnathcjd/gogram/telegram"
 )
 
 func GetBotByUsername(client *telegram.Client, username string) (*telegram.UserObj, *telegram.UserFull, error) {
