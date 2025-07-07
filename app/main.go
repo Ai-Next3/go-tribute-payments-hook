@@ -133,7 +133,7 @@ func sendTransactions(transactions []tribute.Transaction) error {
 			waiter.Add(1)
 			go func(tx tribute.Transaction) {
 				defer waiter.Done()
-				logger := slog.With("transaction_id", tx.ID, "user_id", tx.User.TelegramID)
+				logger := slog.With("transaction_id", tx.ID, "user_id", tx.User.TelegramID, "amount", tx.Donation.Amount, "currency", tx.Currency)
 				logger.Info("Processing transaction")
 
 				// --- НАЧАЛО: Сохранение доната в таблицу donations ---
