@@ -142,7 +142,7 @@ func sendTransactions(transactions []tribute.Transaction) error {
 					}
 
 					tgID := tx.User.TelegramID
-					amount := tx.DonationRequest.Amount
+					amount := tx.Donation.Amount
 					if tgID != 0 && amount > 0 {
 						err := addBalanceByTgID(tgID, amount)
 						if err != nil {
