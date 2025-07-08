@@ -366,21 +366,6 @@ func main() {
 
 	slog.Info("Starting service...")
 
-	// --- НАЧАЛО: Проверка подключения к базе данных ---
-	slog.Info("Checking database connection...")
-	db, err := openDB()
-	if err != nil {
-		slog.Error("Failed to create DB connection object", "error", err)
-		os.Exit(1)
-	}
-	if err := db.Ping(); err != nil {
-		slog.Error("Failed to connect to the database", "error", err)
-		os.Exit(1)
-	}
-	db.Close() // Закрываем тестовое подключение
-	slog.Info("Database connection successful.")
-	// --- КОНЕЦ: Проверка подключения к базе данных ---
-
 	client, err := tg.RunningClient()
 	if err != nil {
 		slog.Error("Failed to get running client", "error", err)
